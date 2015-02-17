@@ -1,0 +1,114 @@
+---
+title: "Exercise Quantification"
+author: "jgblouin"
+date: "Wednesday, February 11, 2015"
+output: html_document
+---
+
+## Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.  
+
+## Data Processing
+
+First, load the required libraries and acquire the data.
+```{r, echo= TRUE}
+library(caret)
+library(randomForest)
+
+## if (!file.exists("Machine_Learning/pml-training.csv")) {
+##   download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml## -training.csv", destfile = "pml-training.csv")
+## }
+## if (!file.exists("Machine_Learning/pml-testing.csv")) {
+##   download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml## -testing.csv", destfile = "pml-testing.csv")
+## }
+tempData <-read.csv("pml-training.csv")
+testing <-read.csv("pml-testing.csv")
+
+```
+
+We now remove columns with more than 100 NA values and variance is less than 10.
+
+```{r, warning =FALSE}
+##Remove columns with more than 100 NAs.
+data <- tempData[, colSums(is.na(tempData)) < 100]
+
+##Keep variables with variance > 10.
+colvar <- apply(data, 2, var)
+selectBigVar <- which(colvar > 10)
+selectBigVar <- as.vector(selectBigVar)
+```
+We can now restrict our study to relevant features. Examining the documentation concerning the data reveals that the statistical variables are not needed for our purpose.
+```{r}
+selectManual <- c(2, 8, 9, 24:26, 30:33, 37:39, 49, 50, 65:67, 71, 72, 83, 87:89, 93)
+combine <- unique(as.vector(rbind(selectBigVar, selectManual)))
+select <- combine[-1]
+data <- data[select]
+```
+We can now plot the frequencies of the classes.
+```{r}
+barplot(table(data$classe), main = "Frequencies of classes")
+```
+
+## Splitting the data set
+
+The data set is still large. As seen below, it has 19622 observations and 45 variables.
+```{r}
+dim(data)
+```
+
+This data set can be partitioned into a training set and into a cross validation set with a 60:40 split.
+```{r, warning=FALSE}
+inTrain <- createDataPartition(data$classe, p = 0.6, list = FALSE)
+training <- data[inTrain,]
+crossValidation <- data[-inTrain,]
+```
+## Model selection
+
+We are now in possession of a training, testing and cross validation set, so we can now fit a model using random forest.
+```{r}
+fit <- randomForest(classe ~., data = training)
+fit
+```
+  
+  
+  This model can now be used to predict on the cross validation set.
+```{r}
+predcv <- predict(fit, crossValidation)
+confusionMatrix(predcv, crossValidation$classe)
+```
+The model proves very acurate, with an accuracy of 99.8% on the training set.  
+
+## Prediction results for the training set
+
+Here are the predictions on the testing set.
+```{r}
+predictedResults <- as.character(predict(fit, testing))
+predictedResults
+##Tests <- cbind(testing, predictedResults)
+##subset(Tests, select=names(Tests)[grep("belt|[^(fore)]arm|dumbbell|forearm", names(Tests), invert=TRUE)]))
+
+
+```
+
+## Submit to Coursera
+
+To submit, use the following. The function creates 20 .txt files which will be submitted.
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictedResults)
+```
+
+## References
+
+* Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013
+
+* http://groupware.les.inf.puc-rio.br/har
+
